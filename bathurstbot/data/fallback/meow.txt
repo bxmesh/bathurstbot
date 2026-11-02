@@ -1,0 +1,24 @@
+# meow's fallback facts: what it answers when its pool of AI-written facts is empty or Workers AI
+# is down. Each one is short (at most 60 bytes, so it fits half of any reply) and comes from a
+# passage in data/meow/, so it's derived from Wikipedia's articles "Super Troopers", "Broken
+# Lizard" and "Thomas DeCoud" (the revisions named in those files), CC BY-SA 4.0
+# (https://creativecommons.org/licenses/by-sa/4.0/), and shared under the same licence. One fact
+# per line; lines starting with # are comments.
+
+Super Troopers (2001) was made by Broken Lizard.
+Super Troopers was directed by Jay Chandrasekhar.
+Super Troopers is set in fictional Spurbury, Vermont.
+Its troopers patrol 50 miles of Vermont highway.
+Farva was off road duty after a school bus incident.
+Brian Cox plays Captain John O'Hagan.
+Bill Murray was offered O'Hagan's role for $100,000.
+Lynda Carter has a cameo in Super Troopers.
+Super Troopers won an Audience Award at SXSW in 2001.
+Super Troopers grossed $23.2 million worldwide.
+Esquire: a "shaggy-dog classic for Generation Y."
+Super Troopers became a cult film.
+Ebert gave Super Troopers 2.5 stars out of 4.
+Super Troopers 2 was released on 20 April 2018.
+Super Troopers 2 was partly crowdfunded on Indiegogo.
+Super Troopers 3 was announced as Winter Soldiers.
+Thomas DeCoud played the Meow Game on SportsCenter.

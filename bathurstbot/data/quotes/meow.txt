@@ -1,0 +1,64 @@
+# meow's quotes: short lines from the film Super Troopers (2001), verbatim, as the reply sends
+# them ("Speaker: words"). Who says it is as Wikiquote names them; stage directions in brackets and
+# Wikiquote's italics are left out, the words are unchanged. Lines with strong language are left
+# out. A quote that doesn't fit half the bot's maximum message length is skipped.
+# Source: "Super Troopers", Wikiquote
+# https://en.wikiquote.org/w/index.php?title=Super_Troopers&oldid=4017742
+# Revision 4017742 of 22 September 2026, retrieved 2 November 2026.
+# Authors: Wikiquote contributors: https://en.wikiquote.org/w/index.php?title=Super_Troopers&action=history
+# Licence: Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0),
+# https://creativecommons.org/licenses/by-sa/4.0/ . This file is shared under the same licence.
+# One quote per line; lines starting with # are comments.
+
+Foster: Ten? Starting right 'meow?'
+Foster: All right meow. Hand over your license and registration.
+Foster: Your registration? Hurry up meow.
+Foster: All right meow, where were we?
+Larry Johnson: Excuse me, are you saying meow?
+Foster: Am I saying meow?
+Larry Johnson: I could have sworn you said meow.
+Foster: Do I look like a cat to you, boy?
+Foster: Am I jumpin' around all nimbly-bimbly from tree to tree?
+Foster: Am I drinking milk from a saucer?
+Foster: Do you see me eating mice?!
+Foster: You stop laughing right meow!
+Foster: No buts meow. It's the law.
+Foster: Not so funny meow, is it?
+Foster: Meow!
+Mac: All right, how about "Cat Game?"
+Farva: I'm all highway.
+Farva: I just lost a buck... to myself!
+Farva: I'll take six schlitzes... or whatever's free.
+Farva: I gotta bust criminals! It's what I gotta do!
+Farva: Gimme a liter o' cola.
+Farva: It's powdered sugar.
+Farva: It's delicious.
+Farva: You mean Shenanigans'?
+Farva: Don't call me Radio, Unit 91.
+Mac: Don't call me Unit 91, Radio!
+Mac: YOU BOYS LIKE MEX-E-CO?!?! YEEEEEEEEEEEEEEEEEEEEEEEEE!
+Mac: One... Two... Three... Do It!
+Mac: But our shenanigans are cheeky and fun.
+Mac: Evil shenanigans!
+Mac: Gree-tings.
+Thorny: Yeah, his shenanigans are cruel and tragic.
+Foster: Which wouldn't make them shenanigans at all, really.
+Thorny: Canada, eh? Almost made it.
+Thorny: Mother of God.
+Thorny: 'Some male figure'? I'm his dad!
+Thorny: I am all that is MAN!
+Thorny: Enhance... Enhance... Enhance...
+Thorny: License and registration, please.
+Thorny: You know how fast you were goin'?
+Thorny: That's brown magic.
+Foster: What, are you the shoe police now?
+Foster: Oh, biker... I'm an idiot.
+Rabbit: You are freakin' out....man.
+Rabbit: Oh look, a bar of soap.
+Grady: The lice ... hate the sugar.
+O'Hagen: Look what I found! A two-by-four!
+Second Dimpus Guy: Roger, holding the spit.
+Dimpus Burger Guy: I don't know what that is!
+Tagline: It's their highway. You're just driving on it.
+Tagline: You don't mess with the law. The law messes with you.
+Tagline: Altered State Police
