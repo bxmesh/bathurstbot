@@ -1,0 +1,83 @@
+# BathurstBot (meshcore-bot v1.1.0 and our plugins), as upstream's user meshcore (uid 1000;
+# bathurstbot/Dockerfile). One pod, never two at once: one TCP client on the companion, one
+# SQLite writer. No pod while bathurstbot.enabled is false. No Service: nothing connects to it.
+{{- $b := .Values.bathurstbot }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bathurstbot
+  labels:
+    {{- include "bathurstbot.labels" . | nindent 4 }}
+    app.kubernetes.io/name: bathurstbot
+spec:
+  replicas: {{ ternary 1 0 $b.enabled }}
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: bathurstbot
+  template:
+    metadata:
+      labels:
+        {{- include "bathurstbot.labels" . | nindent 8 }}
+        app.kubernetes.io/name: bathurstbot
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        {{- include "bathurstbot.podSecurity" (dict "uid" 1000) | nindent 8 }}
+      containers:
+        # No probes: there's nothing to ask. If the companion can't be reached at start, or the
+        # bot gives up, the process exits and the kubelet restarts it (with back-off); once
+        # connected, meshcore-bot reconnects by itself.
+        - name: bot
+          image: {{ include "bathurstbot.image" $b.image }}
+          securityContext:
+            {{- include "bathurstbot.containerSecurity" . | nindent 12 }}
+            readOnlyRootFilesystem: true
+          env:
+            - name: TZ
+              value: Australia/Sydney
+          resources:
+            {{- toYaml $b.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            # The rendered config (with the companion's address): memory only, never on disk.
+            - name: config
+              mountPath: /run/bathurstbot
+            - name: tmp
+              mountPath: /tmp
+            - name: secrets
+              mountPath: /srv/secrets
+              readOnly: true
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: bathurstbot-data
+        - name: config
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Mi
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+        - name: secrets
+          secret:
+            secretName: bathurstbot
+            defaultMode: 0440
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: bathurstbot-data
+  labels:
+    {{- include "bathurstbot.labels" . | nindent 4 }}
+    app.kubernetes.io/name: bathurstbot
+  {{- include "bathurstbot.keep" $b.data.keep | nindent 2 }}
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: {{ $b.data.storageClassName }}
+  resources:
+    requests:
+      storage: {{ $b.data.size }}

@@ -1,0 +1,12 @@
+# Source: "Thomas DeCoud", Wikipedia, The Free Encyclopedia
+# https://en.wikipedia.org/w/index.php?title=Thomas_DeCoud&oldid=1378381180
+# Revision 1378381180 of 4 October 2026, retrieved 2 November 2026.
+# Authors: Wikipedia contributors: https://en.wikipedia.org/w/index.php?title=Thomas_DeCoud&action=history
+# Licence: Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0),
+# https://creativecommons.org/licenses/by-sa/4.0/ . This file is shared under the same licence.
+# Changed from the original: the plain-text extract, a selection of its paragraphs (lists,
+# tables and passages about deaths or violence left out), long paragraphs split at sentence
+# ends. One passage per line; lines starting with # are comments.
+# Only the one sentence that mentions the film's "Meow Game" is used.
+
+In a SportsCenter interview on September 27, 2012, Decoud played the "Meow Game" from the movie Super Troopers.

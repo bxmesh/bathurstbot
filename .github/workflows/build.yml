@@ -1,0 +1,132 @@
+# Builds the bot's image when a pull request changes it, tests it, pushes it to GHCR tagged with
+# the commit SHA, and commits the new tag into deploy/values.yaml on the pull request's own branch:
+# the tag lands with the edit that changed the bot, staging the deployment (O14, O160). Merging
+# deploys it once the owner syncs in Argo (BxMesh is always manual, O14). It never pushes to main.
+#
+# GitHub-hosted runners: this repo is public (T13). A fork's pull request builds and tests without
+# pushing or committing anything (its token is read-only).
+#
+# Each action is pinned by its tag's commit SHA, the same as corescope.bxmesh.net's build.yml
+# (checked against the tags on GitHub, 2 November 2026).
+name: build
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions: {}
+
+concurrency:
+  group: build-${{ github.event.pull_request.number }}
+
+jobs:
+  build:
+    # Not for the tag commit this job pushes: it changes only deploy/values.yaml.
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write   # the tag commit on the pull request's branch
+      packages: write   # ghcr.io/bxmesh/...
+    env:
+      PUBLISH: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+      IMAGE_PREFIX: ghcr.io/bxmesh/bathurstbot
+    steps:
+      # The branch itself, not the merge commit: the image is built from the commit it's tagged
+      # with, and the tag commit goes on top of it.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      # The image is built when bathurstbot/ changed on this pull request, or when
+      # deploy/values.yaml has no tag for it yet. Pull requests that touch only deploy/ build nothing.
+      - name: What to build
+        id: plan
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -eu
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          for image in bathurstbot; do
+            tag=$(yq ".${image}.image.tag" deploy/values.yaml)
+            if [ -z "$tag" ] || [ "$tag" = null ] || ! git diff --quiet "$BASE"...HEAD -- "$image/"; then
+              echo "$image=true" >> "$GITHUB_OUTPUT"; echo "build $image"
+            else
+              echo "$image=false" >> "$GITHUB_OUTPUT"; echo "skip $image: unchanged, tag $tag"
+            fi
+          done
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
+
+      - if: env.PUBLISH == 'true' && steps.plan.outputs.bathurstbot == 'true'
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6  # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Built into the runner's Docker first, so it can be tested before anything is pushed.
+      - name: Build bathurstbot
+        if: steps.plan.outputs.bathurstbot == 'true'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc  # v7.4.0
+        with:
+          context: bathurstbot
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: ${{ env.IMAGE_PREFIX }}/bathurstbot:${{ steps.plan.outputs.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ steps.plan.outputs.sha }}
+
+      # Inside the image, against meshcore-bot's own code: the unit tests (Workers AI faked; no
+      # secrets), then meshcore-bot's validate_config.py on the config, rendered with a dummy
+      # companion address.
+      - name: Test bathurstbot
+        if: steps.plan.outputs.bathurstbot == 'true'
+        env:
+          IMAGE: ${{ env.IMAGE_PREFIX }}/bathurstbot:${{ steps.plan.outputs.sha }}
+        run: |
+          set -eu
+          docker run --rm --read-only --tmpfs /tmp -e PYTHONDONTWRITEBYTECODE=1 \
+            -v "$PWD/bathurstbot/tests:/tests:ro" --entrypoint python3 "$IMAGE" \
+            -m unittest discover -s /tests -v
+          docker run --rm --read-only --tmpfs /tmp -e PYTHONDONTWRITEBYTECODE=1 --entrypoint sh "$IMAGE" -c '
+            sed "s/@@COMPANION_HOST@@/companion.invalid/; s/@@COMPANION_PORT@@/5000/" \
+              /app/bathurstbot/config.ini > /tmp/config.ini
+            cd /app && python3 validate_config.py --config /tmp/config.ini'
+
+      - name: Push bathurstbot
+        if: env.PUBLISH == 'true' && steps.plan.outputs.bathurstbot == 'true'
+        env:
+          IMAGE: ${{ env.IMAGE_PREFIX }}/bathurstbot:${{ steps.plan.outputs.sha }}
+        run: docker push "$IMAGE"
+
+      - name: Stage the new tag in deploy/values.yaml
+        if: env.PUBLISH == 'true' && contains(steps.plan.outputs.*, 'true')
+        env:
+          SHA: ${{ steps.plan.outputs.sha }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          BUILT: ${{ toJSON(steps.plan.outputs) }}
+        run: |
+          set -eu
+          built=""
+          for image in bathurstbot; do
+            if [ "$(echo "$BUILT" | jq -r --arg i "$image" '.[$i]')" = true ]; then
+              # Only the tag's own line changes (the first "    tag:" in the image's top-level
+              # block), so the file keeps its layout and comments.
+              awk -v img="$image" -v sha="$SHA" '
+                /^[^ #]/ { inblock = ($0 ~ "^" img ":") }
+                inblock && !done && /^    tag: / { sub(/tag: "[^"]*"/, "tag: \"" sha "\""); done = 1 }
+                { print }' deploy/values.yaml > "$RUNNER_TEMP/values.yaml"
+              mv "$RUNNER_TEMP/values.yaml" deploy/values.yaml
+              built="$built $image"
+            fi
+          done
+          git diff --quiet && { echo "nothing to stage"; exit 0; }
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -q -m "deploy:${built} at ${SHA:0:7}" deploy/values.yaml
+          git push origin "HEAD:${HEAD_REF}"

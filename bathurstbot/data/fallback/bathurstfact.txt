@@ -1,0 +1,26 @@
+# bathurstfact's fallback facts: what it answers when its pool of AI-written facts is empty or
+# Workers AI is down. Each one is short (at most 60 bytes, so it fits half of any reply) and comes
+# from a passage in data/bathurstfact/, so it's derived from Wikipedia's articles "Bathurst, New
+# South Wales", "Mount Panorama Circuit" and "Bathurst 1000" (the revisions named in those files),
+# CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/), and shared under the same
+# licence. One fact per line; lines starting with # are comments.
+
+Founded 1815: Australia's oldest inland settlement.
+Bathurst became Australia's first gold centre.
+Australia's first payable gold was found here in 1851.
+Bathurst's first licensed inn, the Highland Laddie: 1835.
+In 1875 Bathurst had 61 hotels open at once.
+The railway from Sydney reached Bathurst in 1876.
+The Macquarie River runs through the middle of Bathurst.
+The Macquarie is part of the Murray-Darling basin.
+Mount Panorama is a public road on non-race days.
+Mount Panorama drops 174 m from top to bottom.
+Mount Panorama has grades as steep as 1 in 6.
+Hell Corner is named after a tree stump on its apex.
+Mount Panorama Circuit was first used on 16 April 1938.
+The Bathurst 1000 began as the Armstrong 500 in 1960.
+The race moved from Phillip Island to Bathurst in 1963.
+The race went from 500 miles to 1000 km in 1973.
+Jim Richards won the Bathurst 1000 seven times.
+Jim Richards holds the record: 35 Bathurst 1000 starts.
+The winners' trophy reads "King of the Mountain".
