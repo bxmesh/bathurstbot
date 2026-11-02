@@ -42,7 +42,7 @@ it again; once connected, it reconnects by itself (every 10 s, backing off to 60
 | cmd | `cmd`, `cmds`, `commands` | The list of commands |
 | version | `version`, `ver` | meshcore-bot's version |
 | contact | `contact` | The bot's contact card |
-| schedule | `schedule` | **DM only.** Scheduled messages (none) and the advert interval |
+| schedule | `schedule` | **DM only.** Scheduled messages (none) and the advert interval (a flood advert every 49 hours) |
 | bathurstfact | `bathurstfact`, `bxfact` | A short fact about Bathurst, Mount Panorama or the Bathurst 1000 |
 | meow | `meow` | **Only on scope `au-nsw-bhs`.** A Super Troopers quote, or now and then a fact about the film |
 

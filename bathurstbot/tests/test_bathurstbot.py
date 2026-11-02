@@ -191,6 +191,10 @@ class ConfigTest(unittest.TestCase):
     def test_hop_limit(self):
         self.assertEqual(self.config.getint("Channels", "max_response_hops"), 12)
 
+    def test_adverts_every_49_hours_none_at_start(self):
+        self.assertEqual(self.config.getint("Bot", "advert_interval_hours"), 49)
+        self.assertEqual(self.config.get("Bot", "startup_advert"), "false")
+
     def test_disabled_builtin_stays_silent(self):
         from modules.commands.catfact_command import CatfactCommand
         catfact = CatfactCommand(FakeBot())
