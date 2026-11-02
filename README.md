@@ -17,7 +17,8 @@ v1.1.0 (MIT) and deployed to cluster-02. The design, the layout and the rules ar
 - **Only to messages sent with the region scope `au`, `au-nsw` or `au-nsw-bhs`**, and it replies
   in the same scope. A message with no scope (a global flood) gets no answer. Set your scope in
   your MeshCore app.
-- **DMs** are answered too, because `advert`, `neighbors` and `schedule` work only in a DM
+- **Only to messages that came over at most 12 hops.**
+- **DMs** are answered too, because `advert` and `schedule` work only in a DM
   (upstream's design). A DM carries no scope.
 
 It connects to its companion radio over TCP; the address comes from OpenBao at start, never from
@@ -34,7 +35,6 @@ it again; once connected, it reconnects by itself (every 10 s, backing off to 60
 | path | `path`, `decode`, `route`, `p` | Decodes your message's path into repeaters |
 | trace | `trace`, `tracer` | Traces a path, e.g. `trace 01,7a,55` |
 | prefix | `prefix`, `lookup`, `repeater` | Repeaters with a given prefix |
-| neighbors | `neighbors`, `neighbours` | **DM only.** Runs one zero-hop neighbour discovery (15 minutes' cooldown) |
 | stats | `stats` | The bot's usage over the last day |
 | channels | `channels`, `channel` | BxMesh's channels: `#bathurst`, `#test` |
 | advert | `advert` | **DM only.** Sends a flood advert (once an hour) |
@@ -46,7 +46,8 @@ it again; once connected, it reconnects by itself (every 10 s, backing off to 60
 | bathurstfact | `bathurstfact`, `bxfact` | A short fact about Bathurst, Mount Panorama or the Bathurst 1000 |
 | meow | `meow` | **Only on scope `au-nsw-bhs`.** A Super Troopers quote, or now and then a fact about the film |
 
-Every other built-in command is disabled by name in `bathurstbot/config.ini`, and allowed in no
+`neighbors` is off, and so is the packet capture service it needs: the bot runs no neighbour
+discovery and spends no airtime on its own. Every other built-in command is disabled by name in `bathurstbot/config.ini`, and allowed in no
 channel. A few of upstream's commands are admin-only in its code whatever their switch says
 (`reload`, `channelpause`, `feed`, `status`) and `gwx` has no switch at all: with no admins
 configured, nobody can use them, a channel gets no reply, and a DM naming one gets "access denied".
@@ -68,7 +69,8 @@ the AI never writes or recalls quotes. Otherwise it sends a fact, like bathurstf
 1. A background service (`local/service_plugins/factpool_service.py`) keeps a pool of up to 10
    facts per topic on the bot's volume (`/data/factpool.json`).
 2. While a pool isn't full, at most once every 3 minutes, it takes a random passage from that
-   topic's Wikipedia text (`data/bathurstfact/`, `data/meow/`) and asks Cloudflare Workers AI
+   topic's bundled text (`data/bathurstfact/`, `data/meow/`: Wikipedia, and for meow also
+   Wikiquote's "Cat Game" scene) and asks Cloudflare Workers AI
    (`@cf/zai-org/glm-4.7-flash`, with its reasoning turned off) for one fact from that passage
    only, within the length limit, with no preamble. Only the final answer is read.
 3. A fact over the limit, or one that isn't a single plain fact, is thrown away; the next try comes
@@ -94,6 +96,7 @@ out). Fetched on 2 November 2026.
 | `data/bathurstfact/bathurst-1000.txt` | Wikipedia, "[Bathurst 1000](https://en.wikipedia.org/w/index.php?title=Bathurst_1000&oldid=1380708688)", revision of 17 October 2026, by Wikipedia contributors |
 | `data/meow/super-troopers.txt` | Wikipedia, "[Super Troopers](https://en.wikipedia.org/w/index.php?title=Super_Troopers&oldid=1382157982)", revision of 27 October 2026, by Wikipedia contributors |
 | `data/meow/broken-lizard.txt` | Wikipedia, "[Broken Lizard](https://en.wikipedia.org/w/index.php?title=Broken_Lizard&oldid=1378531246)", the History paragraphs about Super Troopers, by Wikipedia contributors |
+| `data/meow/super-troopers-cat-game.txt` | Wikiquote, "[Super Troopers](https://en.wikiquote.org/w/index.php?title=Super_Troopers&oldid=4017742)", the "Cat Game" scene (the film's meow game) as one passage, by Wikiquote contributors |
 | `data/meow/thomas-decoud.txt` | Wikipedia, "[Thomas DeCoud](https://en.wikipedia.org/w/index.php?title=Thomas_DeCoud&oldid=1378381180)", its one sentence about the film's "Meow Game", by Wikipedia contributors |
 | `data/quotes/meow.txt` | Wikiquote, "[Super Troopers](https://en.wikiquote.org/w/index.php?title=Super_Troopers&oldid=4017742)", revision of 22 September 2026, by Wikiquote contributors |
 | `data/fallback/*.txt` | Short facts written from the passages above |

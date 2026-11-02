@@ -99,7 +99,7 @@ class NoNetwork(unittest.TestCase):
 
 ENABLED = {
     # mesh tools
-    "test", "ping", "multitest", "path", "trace", "prefix", "neighbors", "stats", "channels", "advert",
+    "test", "ping", "multitest", "path", "trace", "prefix", "stats", "channels", "advert",
     # info
     "help", "cmd", "version", "contact", "schedule",
 }
@@ -180,10 +180,16 @@ class ConfigTest(unittest.TestCase):
         for name in ENABLED - {"multitest", "help"}:
             self.assertIn(name, words)
         self.assertTrue({"mt", "bxfact", "meow"} <= words)
+        self.assertNotIn("neighbors", words)
 
-    def test_packet_capture_publishes_nothing(self):
+    def test_no_packet_capture_no_neighbour_discovery(self):
+        self.assertFalse(self.config.getboolean("PacketCapture", "enabled"))
+        self.assertFalse(self.config.getboolean("PacketCapture", "neighbors_enabled"))
         self.assertFalse(self.config.getboolean("PacketCapture", "mqtt_enabled"))
-        self.assertEqual(self.config.get("PacketCapture", "output_file").strip(), "")
+        self.assertFalse(self.config.getboolean("Neighbors_Command", "enabled"))
+
+    def test_hop_limit(self):
+        self.assertEqual(self.config.getint("Channels", "max_response_hops"), 12)
 
     def test_disabled_builtin_stays_silent(self):
         from modules.commands.catfact_command import CatfactCommand
@@ -201,9 +207,20 @@ class DataTest(unittest.TestCase):
             self.assertGreaterEqual(len(factpool.load_passages(str(DATA), topic)), minimum)
             for path in Path(DATA, topic).glob("*.txt"):
                 head = path.read_text(encoding="utf-8")[:1200]
-                self.assertIn("Wikipedia", head, path)
+                self.assertRegex(head, r"# Source: .*, (Wikipedia|Wikiquote)", path)
                 self.assertIn("CC BY-SA 4.0", head, path)
                 self.assertIn("oldid=", head, path)
+
+    def test_cat_game_scene_is_a_meow_passage(self):
+        path = Path(DATA, "meow", "super-troopers-cat-game.txt")
+        head = path.read_text(encoding="utf-8")[:1200]
+        self.assertIn("Wikiquote", head)
+        self.assertIn("oldid=4017742", head)
+        self.assertIn("CC BY-SA 4.0", head)
+        scene = factpool.read_lines(path)
+        self.assertEqual(len(scene), 1)
+        self.assertIn('how about "Cat Game?"', scene[0])
+        self.assertIn(scene[0], factpool.load_passages(str(DATA), "meow"))
 
     def test_fallbacks_short(self):
         for topic in factpool.TOPICS:
