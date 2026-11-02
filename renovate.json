@@ -1,0 +1,4 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Renovate opens a pull request for each new release of anything pinned here, which the owner merges (R5). The shared preset applies (zindello-cluster/cluster-platform: renovate/preset.json); this file holds only what's particular to this repo."
+}
