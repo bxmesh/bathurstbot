@@ -1,0 +1,34 @@
+# BathurstBot, in the namespace dmz-bathurstbot: meshcore-bot v1.1.0 with our config and plugins
+# (bathurstbot/), connected over TCP to its companion on the owner's repeater. The companion's
+# address is never here (the repo is public): it comes from OpenBao. The namespace's one path onto
+# the LAN, to the companion's one port, is cluster-platform's (zone-policies/paths.yaml).
+
+bathurstbot:
+  # false: no pod (the volume and secrets stay). One pod at most: one TCP client on the
+  # companion, and one SQLite writer.
+  enabled: true
+  image:
+    repository: ghcr.io/bxmesh/bathurstbot/bathurstbot
+    tag: ""  # CI writes the commit SHA here, on the pull request that changed bathurstbot/ (O14)
+  resources:  # about 100 MiB resident at start (measured locally)
+    requests:
+      cpu: 25m
+      memory: 128Mi
+    limits:
+      memory: 384Mi
+  # meshcore-bot's database (contacts, paths, stats) and the fact pools (factpool.json). Mounted
+  # at /data.
+  data:
+    storageClassName: ceph-block
+    size: 1Gi
+    keep: true  # Argo never prunes or deletes the volume
+
+# Secrets, from OpenBao through External Secrets (spec: Security, secrets and access). The paths
+# are secret/dmz-bathurstbot/companion (host, port) and secret/dmz-bathurstbot/workers-ai
+# (account_id, token).
+secrets:
+  openbao:
+    server: http://openbao-active.openbao.svc:8200
+    path: secret
+    authMountPath: kubernetes
+  refreshInterval: 1h

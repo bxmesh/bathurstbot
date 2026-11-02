@@ -1,0 +1,5 @@
+apiVersion: v2
+name: bathurstbot
+description: BathurstBot, BxMesh's MeshCore bot (meshcore-bot), through its companion on the LAN
+type: application
+version: 0.1.0
