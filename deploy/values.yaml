@@ -10,10 +10,12 @@ bathurstbot:
   image:
     repository: ghcr.io/bxmesh/bathurstbot/bathurstbot
     tag: "429568a9fad620a29ce424b0e739afae2739c12b"  # CI writes the commit SHA here, on the pull request that changed bathurstbot/ (O14)
-  resources:  # about 100 MiB resident at start (measured locally)
+  # About 100 MiB resident at start (measured locally); on cluster-02 (2-3 November 2026, 16.5 h)
+  # p95 144 MiB, max 146 MiB, so the request is that plus about a quarter.
+  resources:
     requests:
       cpu: 25m
-      memory: 128Mi
+      memory: 192Mi
     limits:
       memory: 384Mi
   # meshcore-bot's database (contacts, paths, stats) and the fact pools (factpool.json). Mounted
