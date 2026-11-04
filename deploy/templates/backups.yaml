@@ -93,7 +93,8 @@ spec:
 # The restore test: on the first Sunday of the month, the newest snapshot, which must be from the
 # night before, restored into a scratch volume of the claim's kind and checked: restic re-reads
 # every restored file against the snapshot (--verify), the file count must match the snapshot's,
-# and every SQLite database must pass integrity_check. The scratch volume goes with the pod. A
+# and every SQLite database must pass integrity_check. On a pass the restored files are deleted;
+# the scratch volume itself goes with the pod, when its Job leaves the history. A
 # failure fails the Job, which kube-state-metrics shows. Kubernetes' cron has no "first Sunday",
 # so it starts every Sunday and does nothing on the other three or four.
 apiVersion: batch/v1
@@ -106,8 +107,11 @@ spec:
   schedule: {{ $b.restoreTest.schedule | quote }}
   timeZone: {{ $b.restoreTest.timeZone | quote }}
   concurrencyPolicy: Forbid
-  successfulJobsHistoryLimit: 1
-  failedJobsHistoryLimit: 1
+  # It runs weekly and tests monthly, so the last real test is at most four skipped runs back:
+  # eight successful Jobs keep it, and its log, until the next one (up to eight weeks). A Job
+  # can't label itself as a real run (it has no API access), so its log says which it was.
+  successfulJobsHistoryLimit: 8
+  failedJobsHistoryLimit: 3
   jobTemplate:
     spec:
       backoffLimit: 0
@@ -198,6 +202,8 @@ spec:
                       sys.exit("restore-test: SQLite integrity_check failed: " + "; ".join(bad))
                   PY
                   echo "restore-test: {{ $v.claim }} passed"
+                  # The kept Job keeps its scratch claim: empty it, so it holds nothing for weeks.
+                  rm -rf /scratch/restored
               envFrom:
                 - secretRef:
                     name: volsync-{{ $v.claim }}
