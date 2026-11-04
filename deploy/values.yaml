@@ -34,3 +34,39 @@ secrets:
     path: secret
     authMountPath: kubernetes
   refreshInterval: 1h
+
+# Backups (R15; cluster-docs spec/design.md, Storage: Backups; O265, O269, O270): each volume
+# below, nightly, to the one R2 bucket by VolSync's restic mover (cluster-platform volsync/), and
+# restored into a scratch volume and checked on the first Sunday of each month
+# (templates/backups.yaml). The bucket, its token and restic's password come from OpenBao,
+# secret/dmz-bathurstbot/backups (cluster-terraform's stacks/cloudflare), never from here.
+#
+# The schedules are in UTC: VolSync's controller has no time-zone data (its 0.17.0 image), so it
+# can't take a CRON_TZ= prefix. The volume backups are staggered over 16:00-16:45 UTC, which is
+# 03:00-03:45 in Sydney in summer time (AEDT) and an hour earlier, 02:00-02:45, in winter (AEST).
+backups:
+  volumes:
+    # meshcore-bot's database and the fact pools (bathurstbot.data), as of one instant: a clone.
+    - claim: bathurstbot-data
+      copyMethod: Clone
+      uid: 1000
+      gid: 1000
+      schedule: "30 16 * * *"
+      scratch: {storageClassName: ceph-block, size: 1Gi}
+  # Every volume: 30 daily copies (R15), pruned weekly.
+  retain:
+    daily: 30
+  pruneIntervalDays: 7
+  restoreTest:
+    # The first Sunday of each month at 05:00 in Sydney (O270). The CronJob starts every Sunday
+    # and tests only on the first (templates/backups.yaml).
+    schedule: "0 5 * * 0"
+    timeZone: Australia/Sydney
+    # The newest snapshot must be from the night before.
+    maxAgeHours: 26
+    # VolSync's own image, the release cluster-platform installs (volsync/), pinned by tag and
+    # digest (quay.io, read 4 November 2026): the same restic as the movers.
+    image: quay.io/backube/volsync:0.17.0@sha256:bbc884d4fa108534260025bf1255a1010ebb6bb8dac9ba4f4a77f437ca7f8fbd
+    resources:
+      requests: {cpu: 100m, memory: 256Mi}
+      limits: {cpu: "1", memory: 2Gi}
