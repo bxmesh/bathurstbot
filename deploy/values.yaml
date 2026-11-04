@@ -34,3 +34,55 @@ secrets:
     path: secret
     authMountPath: kubernetes
   refreshInterval: 1h
+
+# Backups (R15; cluster-docs spec/design.md, Storage: Backups; O265, O269, O270): each volume
+# below, nightly, to the one R2 bucket by VolSync's restic mover (cluster-platform volsync/), and
+# restored into a scratch volume and checked on the first Sunday of each month
+# (templates/backups.yaml). The bucket, its token and restic's password come from OpenBao,
+# secret/dmz-bathurstbot/backups (cluster-terraform's stacks/cloudflare), never from here.
+#
+# The schedules are in UTC: VolSync's controller has no time-zone data (its 0.17.0 image), so it
+# can't take a CRON_TZ= prefix. The volume backups are staggered over 16:00-16:45 UTC, which is
+# 03:00-03:45 in Sydney in summer time (AEDT) and an hour earlier, 02:00-02:45, in winter (AEST).
+backups:
+  volumes:
+    # meshcore-bot's database and the fact pools (bathurstbot.data), as of one instant: a clone.
+    - claim: bathurstbot-data
+      copyMethod: Clone
+      uid: 1000
+      gid: 1000
+      fsGroup: 1000
+      schedule: "30 16 * * *"
+      scratch: {storageClassName: ceph-block, size: 1Gi}
+  # restic's cache, a claim VolSync makes per volume. Set here for every volume: left out, VolSync
+  # gives it the source's access mode in the default class, and a CephFS volume's ReadWriteMany
+  # on ceph-block is refused, so the cache never binds and the mover never starts (as happened to
+  # zindello.com.au's first backup). The cache only speeds up the next run.
+  cache:
+    storageClassName: ceph-block
+    accessModes: [ReadWriteOnce]
+    capacity: 1Gi
+  # The movers' limits (as cluster-platform #104 for Prometheus'): restic sizes its workers by
+  # the CPUs it sees, and with no CPU limit it sees the whole node (48 on the R430) and was
+  # OOM-killed at 1Gi. Go takes its GOMAXPROCS from the CPU limit, so 2 CPUs mean 2 workers. Every
+  # volume here is well under 100 GB and 10,000 files, so 2Gi is ample. No requests, as before.
+  moverResources:
+    limits: {cpu: "2", memory: 2Gi}
+  # Every volume: 30 daily copies (R15), pruned weekly.
+  retain:
+    daily: 30
+  pruneIntervalDays: 7
+  restoreTest:
+    # The first Sunday of each month at 05:00 in Sydney (O270). The CronJob starts every Sunday
+    # and tests only on the first (templates/backups.yaml).
+    schedule: "0 5 * * 0"
+    timeZone: Australia/Sydney
+    # The newest snapshot must be from the night before.
+    maxAgeHours: 26
+    # VolSync's own image, the release cluster-platform installs (volsync/), pinned by tag and
+    # digest (quay.io, read 4 November 2026): the same restic as the movers.
+    image: quay.io/backube/volsync:0.17.0@sha256:bbc884d4fa108534260025bf1255a1010ebb6bb8dac9ba4f4a77f437ca7f8fbd
+    resources:
+      requests: {cpu: 100m, memory: 256Mi}
+      # The same CPU limit as the movers: it bounds restic's workers.
+      limits: {cpu: "2", memory: 2Gi}

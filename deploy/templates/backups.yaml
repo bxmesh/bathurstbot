@@ -1,0 +1,255 @@
+{{- /* BACKUPS (R15; cluster-docs spec/design.md, Storage: Backups; O265, O269, O270). Each volume
+       in values `backups.volumes` gets:
+
+         ExternalSecret     volsync-<claim>       restic's repository, password and keys, made
+                                                  from OpenBao's secret/<namespace>/backups: the
+                                                  repository is s3:<endpoint>/<bucket>/volsync/
+                                                  <namespace>/<claim> in the one R2 bucket
+         ReplicationSource  <claim>               the nightly backup, by VolSync's restic mover
+                                                  (cluster-platform volsync/), 30 daily copies
+         CronJob            restore-test-<claim>  the monthly restore test, into a scratch volume
+
+       The mover runs as the files' owner (uid, gid) with no capabilities, so it reads what the app
+       reads. copyMethod Clone (ceph-block): VolSync backs up a ceph-csi clone of the volume, made
+       as the backup starts, so a database on it is copied as of one instant, and the app's own
+       volume is never mounted twice. Direct (CephFS, local-path): the live volume itself. A
+       non-root mover needs an fsGroup to write restic's cache, a new claim owned by root: on a
+       clone it re-owns only the clone; on a Direct volume it must be the files' own group, with
+       OnRootMismatch, so at most it adds group write and setgid once (the owner, 5 November). */ -}}
+{{- $b := .Values.backups }}
+{{- $ns := .Release.Namespace }}
+{{- range $v := $b.volumes }}
+{{- if not (has $v.copyMethod (list "Clone" "Direct")) }}
+{{- fail (printf "backups: %s: copyMethod must be Clone or Direct" $v.claim) }}
+{{- end }}
+{{- if and (ne (int $v.uid) 0) (not $v.fsGroup) }}
+{{- fail (printf "backups: %s: a non-root mover needs fsGroup, or it can't write restic's cache" $v.claim) }}
+{{- end }}
+{{- if and $v.fsGroup (ne $v.copyMethod "Clone") (ne (int $v.fsGroup) (int $v.gid)) }}
+{{- fail (printf "backups: %s: on a Direct volume fsGroup must be the files' own group: any other would re-own the app's files" $v.claim) }}
+{{- end }}
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: volsync-{{ $v.claim }}
+  labels:
+    {{- include "bathurstbot.labels" $ | nindent 4 }}
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: SecretStore
+    name: openbao
+  target:
+    name: volsync-{{ $v.claim }}
+    template:
+      engineVersion: v2
+      data:
+        RESTIC_REPOSITORY: {{ printf "s3:{{ .endpoint }}/{{ .bucket }}/volsync/%s/%s" $ns $v.claim | quote }}
+        RESTIC_PASSWORD: '{{ `{{ .restic_password }}` }}'
+        AWS_ACCESS_KEY_ID: '{{ `{{ .access_key_id }}` }}'
+        AWS_SECRET_ACCESS_KEY: '{{ `{{ .secret_access_key }}` }}'
+        # R2's region is always `auto`.
+        AWS_DEFAULT_REGION: auto
+  data:
+    {{- range $p := list "endpoint" "bucket" "access_key_id" "secret_access_key" "restic_password" }}
+    - secretKey: {{ $p }}
+      remoteRef:
+        key: {{ $ns }}/backups
+        property: {{ $p }}
+    {{- end }}
+---
+apiVersion: volsync.backube/v1alpha1
+kind: ReplicationSource
+metadata:
+  name: {{ $v.claim }}
+  labels:
+    {{- include "bathurstbot.labels" $ | nindent 4 }}
+spec:
+  sourcePVC: {{ $v.claim }}
+  trigger:
+    schedule: {{ $v.schedule | quote }}
+  restic:
+    repository: volsync-{{ $v.claim }}
+    copyMethod: {{ $v.copyMethod }}
+    retain:
+      daily: {{ $b.retain.daily }}
+    pruneIntervalDays: {{ $b.pruneIntervalDays }}
+    moverResources:
+      {{- toYaml $b.moverResources | nindent 6 }}
+    cacheStorageClassName: {{ $b.cache.storageClassName }}
+    cacheAccessModes:
+      {{- toYaml $b.cache.accessModes | nindent 6 }}
+    cacheCapacity: {{ $b.cache.capacity }}
+    moverSecurityContext:
+      {{- if ne (int $v.uid) 0 }}
+      runAsNonRoot: true
+      {{- end }}
+      runAsUser: {{ $v.uid }}
+      runAsGroup: {{ $v.gid }}
+      {{- with $v.fsGroup }}
+      fsGroup: {{ . }}
+      fsGroupChangePolicy: OnRootMismatch
+      {{- end }}
+      seccompProfile:
+        type: RuntimeDefault
+    {{- with $v.node }}
+    moverAffinity:
+      nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+            - matchExpressions:
+                - {key: kubernetes.io/hostname, operator: In, values: [{{ . }}]}
+    {{- end }}
+---
+# The restore test: on the first Sunday of the month, the newest snapshot, which must be from the
+# night before, restored into a scratch volume of the claim's kind and checked: restic re-reads
+# every restored file against the snapshot (--verify), the file count must match the snapshot's,
+# and every SQLite database must pass integrity_check. On a pass the restored files are deleted;
+# the scratch volume itself goes with the pod, when its Job leaves the history. A
+# failure fails the Job, which kube-state-metrics shows. Kubernetes' cron has no "first Sunday",
+# so it starts every Sunday and does nothing on the other three or four.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: restore-test-{{ $v.claim }}
+  labels:
+    {{- include "bathurstbot.labels" $ | nindent 4 }}
+spec:
+  schedule: {{ $b.restoreTest.schedule | quote }}
+  timeZone: {{ $b.restoreTest.timeZone | quote }}
+  concurrencyPolicy: Forbid
+  # It runs weekly and tests monthly, so the last real test is at most four skipped runs back:
+  # eight successful Jobs keep it, and its log, until the next one (up to eight weeks). A Job
+  # can't label itself as a real run (it has no API access), so its log says which it was.
+  successfulJobsHistoryLimit: 8
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 7200
+      template:
+        metadata:
+          # Its own labels only, so no Service or budget of the app's ever selects it.
+          labels:
+            app.kubernetes.io/name: restore-test
+            app.kubernetes.io/instance: {{ $v.claim }}
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          enableServiceLinks: false
+          # As the files' owner. fsGroup only on the scratch volume, so restic can write into its
+          # new root folder.
+          securityContext:
+            {{- if ne (int $v.uid) 0 }}
+            runAsNonRoot: true
+            {{- end }}
+            runAsUser: {{ $v.uid }}
+            runAsGroup: {{ $v.gid }}
+            fsGroup: {{ $v.gid }}
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: restore-test
+              # VolSync's own image: the restic the movers run, with bash and Python's sqlite3.
+              image: {{ $b.restoreTest.image | quote }}
+              command: [/bin/bash, -c]
+              args:
+                - |
+                  set -euo pipefail
+                  # The first Sunday only. The image has no time-zone data, so Sydney's date is
+                  # UTC's twelve hours on: 05:00 in Sydney is 18:00 or 19:00 UTC the day before.
+                  day=$(date -u -d '+12 hours' +%-d)
+                  if [ "$day" -gt 7 ]; then
+                    echo "restore-test: day $day of the month in Sydney, not the first Sunday: nothing to test"
+                    exit 0
+                  fi
+                  restic version
+                  restic --no-lock snapshots --latest 1 --json > /tmp/latest.json
+                  id=$(python3 - /tmp/latest.json "$MAX_AGE_HOURS" <<'PY'
+                  import datetime, json, re, sys
+                  snaps = json.load(open(sys.argv[1]))
+                  if not snaps:
+                      sys.exit("restore-test: no snapshot in the repository")
+                  s = snaps[-1]
+                  m = re.match(r"(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)(?:\.\d+)?(Z|[+-]\d\d:\d\d)$", s["time"])
+                  t = datetime.datetime.strptime(m[1], "%Y-%m-%dT%H:%M:%S")
+                  if m[2] != "Z":
+                      sign = 1 if m[2][0] == "+" else -1
+                      t -= sign * datetime.timedelta(hours=int(m[2][1:3]), minutes=int(m[2][4:6]))
+                  age = (datetime.datetime.utcnow() - t).total_seconds() / 3600
+                  print(f"restore-test: newest snapshot {s['short_id']}, {s['time']}, {age:.1f} h old", file=sys.stderr)
+                  if age > float(sys.argv[2]):
+                      sys.exit(f"restore-test: the newest snapshot is over {sys.argv[2]} h old: the nightly backup isn't running")
+                  print(s["id"])
+                  PY
+                  )
+                  restic --no-lock restore "$id" --target /scratch/restored --verify
+                  restic --no-lock ls --json "$id" > /tmp/ls.json
+                  python3 - /tmp/ls.json /scratch/restored <<'PY'
+                  import json, os, sqlite3, stat, sys
+                  nodes = (json.loads(line) for line in open(sys.argv[1]))
+                  want = sum(1 for n in nodes if n.get("struct_type") == "node" and n.get("type") == "file")
+                  got, dbs, bad = 0, 0, []
+                  for root, _, files in os.walk(sys.argv[2]):
+                      for f in files:
+                          p = os.path.join(root, f)
+                          if not stat.S_ISREG(os.lstat(p).st_mode):
+                              continue
+                          got += 1
+                          with open(p, "rb") as fh:
+                              if fh.read(16) != b"SQLite format 3\x00":
+                                  continue
+                          dbs += 1
+                          try:
+                              result = sqlite3.connect(p).execute("PRAGMA integrity_check").fetchall()
+                          except sqlite3.DatabaseError as e:
+                              result = [(str(e),)]
+                          if result != [("ok",)]:
+                              bad.append(f"{p}: {result[:3]}")
+                  print(f"restore-test: {got} files restored, {want} in the snapshot; {dbs} SQLite databases checked")
+                  if got != want:
+                      sys.exit("restore-test: the restored files don't match the snapshot's count")
+                  if bad:
+                      sys.exit("restore-test: SQLite integrity_check failed: " + "; ".join(bad))
+                  PY
+                  echo "restore-test: {{ $v.claim }} passed"
+                  # The kept Job keeps its scratch claim: empty it, so it holds nothing for weeks.
+                  rm -rf /scratch/restored
+              envFrom:
+                - secretRef:
+                    name: volsync-{{ $v.claim }}
+              env:
+                - name: RESTIC_CACHE_DIR
+                  value: /tmp/restic-cache
+                - name: HOME
+                  value: /tmp
+                - name: MAX_AGE_HOURS
+                  value: {{ $b.restoreTest.maxAgeHours | quote }}
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: [ALL]
+              resources:
+                {{- toYaml $b.restoreTest.resources | nindent 16 }}
+              volumeMounts:
+                - name: scratch
+                  mountPath: /scratch
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            # A new claim for this pod only, deleted with it.
+            - name: scratch
+              ephemeral:
+                volumeClaimTemplate:
+                  spec:
+                    storageClassName: {{ $v.scratch.storageClassName }}
+                    accessModes: [ReadWriteOnce]
+                    resources:
+                      requests:
+                        storage: {{ $v.scratch.size }}
+            - name: tmp
+              emptyDir:
+                sizeLimit: 2Gi
+{{- end }}
