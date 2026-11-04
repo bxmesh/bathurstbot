@@ -23,7 +23,7 @@ jobs:
   build:
     # Not for the tag commit this job pushes: it changes only deploy/values.yaml.
     if: github.actor != 'github-actions[bot]'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 30
     permissions:
       contents: write   # the tag commit on the pull request's branch
