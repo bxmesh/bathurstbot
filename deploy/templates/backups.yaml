@@ -72,6 +72,10 @@ spec:
     pruneIntervalDays: {{ $b.pruneIntervalDays }}
     moverResources:
       {{- toYaml $b.moverResources | nindent 6 }}
+    cacheStorageClassName: {{ $b.cache.storageClassName }}
+    cacheAccessModes:
+      {{- toYaml $b.cache.accessModes | nindent 6 }}
+    cacheCapacity: {{ $b.cache.capacity }}
     moverSecurityContext:
       {{- if ne (int $v.uid) 0 }}
       runAsNonRoot: true

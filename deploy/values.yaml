@@ -53,6 +53,14 @@ backups:
       gid: 1000
       schedule: "30 16 * * *"
       scratch: {storageClassName: ceph-block, size: 1Gi}
+  # restic's cache, a claim VolSync makes per volume. Set here for every volume: left out, VolSync
+  # gives it the source's access mode in the default class, and a CephFS volume's ReadWriteMany
+  # on ceph-block is refused, so the cache never binds and the mover never starts (as happened to
+  # zindello.com.au's first backup). The cache only speeds up the next run.
+  cache:
+    storageClassName: ceph-block
+    accessModes: [ReadWriteOnce]
+    capacity: 1Gi
   # The movers' limits (as cluster-platform #104 for Prometheus'): restic sizes its workers by
   # the CPUs it sees, and with no CPU limit it sees the whole node (48 on the R430) and was
   # OOM-killed at 1Gi. Go takes its GOMAXPROCS from the CPU limit, so 2 CPUs mean 2 workers. Every
