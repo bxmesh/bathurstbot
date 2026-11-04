@@ -12,16 +12,21 @@
        The mover runs as the files' owner (uid, gid) with no capabilities, so it reads what the app
        reads. copyMethod Clone (ceph-block): VolSync backs up a ceph-csi clone of the volume, made
        as the backup starts, so a database on it is copied as of one instant, and the app's own
-       volume is never mounted twice. Direct (CephFS, local-path): the live volume itself. fsGroup
-       only ever on a clone (it re-owns what it's set on); never on a Direct volume. */ -}}
+       volume is never mounted twice. Direct (CephFS, local-path): the live volume itself. A
+       non-root mover needs an fsGroup to write restic's cache, a new claim owned by root: on a
+       clone it re-owns only the clone; on a Direct volume it must be the files' own group, with
+       OnRootMismatch, so at most it adds group write and setgid once (the owner, 5 November). */ -}}
 {{- $b := .Values.backups }}
 {{- $ns := .Release.Namespace }}
 {{- range $v := $b.volumes }}
 {{- if not (has $v.copyMethod (list "Clone" "Direct")) }}
 {{- fail (printf "backups: %s: copyMethod must be Clone or Direct" $v.claim) }}
 {{- end }}
-{{- if and $v.fsGroup (ne $v.copyMethod "Clone") }}
-{{- fail (printf "backups: %s: fsGroup only on a Clone: it would re-own the app's own files" $v.claim) }}
+{{- if and (ne (int $v.uid) 0) (not $v.fsGroup) }}
+{{- fail (printf "backups: %s: a non-root mover needs fsGroup, or it can't write restic's cache" $v.claim) }}
+{{- end }}
+{{- if and $v.fsGroup (ne $v.copyMethod "Clone") (ne (int $v.fsGroup) (int $v.gid)) }}
+{{- fail (printf "backups: %s: on a Direct volume fsGroup must be the files' own group: any other would re-own the app's files" $v.claim) }}
 {{- end }}
 ---
 apiVersion: external-secrets.io/v1
@@ -84,6 +89,7 @@ spec:
       runAsGroup: {{ $v.gid }}
       {{- with $v.fsGroup }}
       fsGroup: {{ . }}
+      fsGroupChangePolicy: OnRootMismatch
       {{- end }}
       seccompProfile:
         type: RuntimeDefault
