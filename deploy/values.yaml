@@ -53,6 +53,12 @@ backups:
       gid: 1000
       schedule: "30 16 * * *"
       scratch: {storageClassName: ceph-block, size: 1Gi}
+  # The movers' limits (as cluster-platform #104 for Prometheus'): restic sizes its workers by
+  # the CPUs it sees, and with no CPU limit it sees the whole node (48 on the R430) and was
+  # OOM-killed at 1Gi. Go takes its GOMAXPROCS from the CPU limit, so 2 CPUs mean 2 workers. Every
+  # volume here is well under 100 GB and 10,000 files, so 2Gi is ample. No requests, as before.
+  moverResources:
+    limits: {cpu: "2", memory: 2Gi}
   # Every volume: 30 daily copies (R15), pruned weekly.
   retain:
     daily: 30
@@ -69,4 +75,5 @@ backups:
     image: quay.io/backube/volsync:0.17.0@sha256:bbc884d4fa108534260025bf1255a1010ebb6bb8dac9ba4f4a77f437ca7f8fbd
     resources:
       requests: {cpu: 100m, memory: 256Mi}
-      limits: {cpu: "1", memory: 2Gi}
+      # The same CPU limit as the movers: it bounds restic's workers.
+      limits: {cpu: "2", memory: 2Gi}

@@ -70,6 +70,8 @@ spec:
     retain:
       daily: {{ $b.retain.daily }}
     pruneIntervalDays: {{ $b.pruneIntervalDays }}
+    moverResources:
+      {{- toYaml $b.moverResources | nindent 6 }}
     moverSecurityContext:
       {{- if ne (int $v.uid) 0 }}
       runAsNonRoot: true
