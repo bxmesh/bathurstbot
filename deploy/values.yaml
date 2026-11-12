@@ -9,7 +9,7 @@ bathurstbot:
   enabled: true
   image:
     repository: ghcr.io/bxmesh/bathurstbot/bathurstbot
-    tag: "429568a9fad620a29ce424b0e739afae2739c12b"  # CI writes the commit SHA here, on the pull request that changed bathurstbot/ (O14)
+    tag: "1203d37c81ab2379e3781df757d7442a2d84c5a9"  # CI writes the commit SHA here, on the pull request that changed bathurstbot/ (O14)
   # About 100 MiB resident at start (measured locally); on cluster-02 (2-3 November 2026, 16.5 h)
   # p95 144 MiB, max 146 MiB, so the request is that plus about a quarter.
   resources:
