@@ -25,6 +25,20 @@ It connects to its companion radio over TCP; the address comes from OpenBao at s
 this repo. If the companion can't be reached when the bot starts, it exits and Kubernetes starts
 it again; once connected, it reconnects by itself (every 10 s, backing off to 60 s).
 
+**LinkWatch** (`local/service_plugins/linkwatch_service.py`, `[LinkWatch]` in `local/config.ini`)
+looks after that link, and sends nothing over the air:
+
+- **Keepalive.** Every 60 s it asks the companion for its clock. openHop's frame server closes a
+  client that has sent it nothing for its `tcp_timeout`, 120 s for a companion added from openHop's
+  web page without a restart, and meshcore-bot on its own sends nothing for 300 s at a time.
+- **Why a message got no reply.** meshcore-bot ignores a channel message whose sender's clock is
+  more than 5 s before the bot's last connection to the companion (it takes it for one the
+  companion cached), and says so only at DEBUG. LinkWatch logs a warning naming the sender and how
+  far behind its clock is. The fix is to set that device's clock.
+- **Liveness.** It touches `/tmp/bathurstbot-alive` whenever the companion sends anything (openHop
+  sends a heartbeat every 15 s); the pod's liveness probe restarts the container when the file is
+  over 10 minutes old.
+
 ## Commands
 
 | Command | Keywords | Notes |

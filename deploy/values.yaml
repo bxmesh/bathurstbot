@@ -9,7 +9,7 @@ bathurstbot:
   enabled: true
   image:
     repository: ghcr.io/bxmesh/bathurstbot/bathurstbot
-    tag: "429568a9fad620a29ce424b0e739afae2739c12b"  # CI writes the commit SHA here, on the pull request that changed bathurstbot/ (O14)
+    tag: "1203d37c81ab2379e3781df757d7442a2d84c5a9"  # CI writes the commit SHA here, on the pull request that changed bathurstbot/ (O14)
   # About 100 MiB resident at start (measured locally); on cluster-02 (2-3 November 2026, 16.5 h)
   # p95 144 MiB, max 146 MiB, so the request is that plus about a quarter.
   resources:
@@ -18,6 +18,12 @@ bathurstbot:
       memory: 192Mi
     limits:
       memory: 384Mi
+  # The liveness probe: fails when nothing has come from the companion for staleSeconds (the
+  # file LinkWatch touches; keep both equal to [LinkWatch] in bathurstbot/local/config.ini).
+  # Two failures a minute apart restart the container, not the pod: same volume, same node.
+  liveness:
+    file: /tmp/bathurstbot-alive
+    staleSeconds: 600
   # meshcore-bot's database (contacts, paths, stats) and the fact pools (factpool.json). Mounted
   # at /data.
   data:
