@@ -17,6 +17,8 @@ import os
 import random
 import sys
 import tempfile
+import time
+import types
 import unittest
 import urllib.request
 from pathlib import Path
@@ -559,6 +561,127 @@ class ServiceTest(NoNetwork):
         self.assertEqual(service.pool_size, 10)
         self.assertEqual(service.interval, 180)
         self.assertEqual(service.ai.model, "@cf/zai-org/glm-4.7-flash")
+
+
+# ---------------------------------------------------------------------------------------------
+# LinkWatch: the keepalive, the skipped-message warning and the liveness file
+# ---------------------------------------------------------------------------------------------
+
+class FakeCommands:
+    def __init__(self, answer=None):
+        self.calls = 0
+        self.answer = answer
+
+    async def get_time(self):
+        self.calls += 1
+        return self.answer
+
+
+class FakeMeshCore:
+    def __init__(self, answer=None, connected=True):
+        self.commands = FakeCommands(answer)
+        self.is_connected = connected
+        self.subscriptions = []
+
+    def subscribe(self, event_type, callback):
+        self.subscriptions.append((event_type, callback))
+
+
+class LinkWatchTest(unittest.TestCase):
+    def make_service(self, connected_ago: float = 10.0):
+        sys.path.insert(0, str(APP / "local" / "service_plugins"))
+        from linkwatch_service import LinkWatchService
+        from meshcore import EventType
+        from meshcore.events import Event
+        from modules.message_handler import MessageHandler
+
+        bot = FakeBot()
+        bot.config.set("LinkWatch", "alive_file", os.path.join(tempfile.mkdtemp(), "alive"))
+        bot.meshcore = FakeMeshCore(Event(EventType.CURRENT_TIME, {"time": 0}))
+        bot.connected = True
+        bot.connection_time = time.time() - connected_ago
+        # meshcore-bot's own check, bound to this bot: the verdict LinkWatch reports is upstream's.
+        holder = SimpleNamespace(bot=bot)
+        bot.message_handler = SimpleNamespace(
+            _is_old_cached_message=types.MethodType(MessageHandler._is_old_cached_message, holder)
+        )
+        bot.channel_manager = SimpleNamespace(get_channel_name={0: "Public", 1: "#test"}.get)
+        return LinkWatchService(bot), bot
+
+    def test_upstream_still_has_what_linkwatch_uses(self):
+        from modules.message_handler import MessageHandler
+        from modules.service_plugins.base_service import BaseServicePlugin
+        self.assertTrue(callable(getattr(MessageHandler, "_is_old_cached_message", None)))
+        self.assertTrue(callable(getattr(BaseServicePlugin, "on_transport_reconnected", None)))
+
+    def test_config_values(self):
+        service, _ = self.make_service()
+        config = load_config()
+        self.assertTrue(config.getboolean("LinkWatch", "enabled"))
+        self.assertEqual(service.keepalive, 60)
+        self.assertEqual(service.stale_after, 600)
+        # Under openHop's 120 s idle timeout, with room for one missed answer.
+        self.assertLess(config.getfloat("LinkWatch", "keepalive_seconds"), 120 / 2 + 1)
+        self.assertEqual(config.get("LinkWatch", "alive_file"), "/tmp/bathurstbot-alive")
+
+    def test_a_slow_clock_is_named(self):
+        service, _ = self.make_service(connected_ago=10)
+        with self.assertLogs("bathurstbot-test", level="WARNING") as logs:
+            warning = service.explain_skip({
+                "channel_idx": 1, "text": "🐝 Zindello TD: meow",
+                "sender_timestamp": int(time.time() - 340),
+            })
+        self.assertIn("#test message from 🐝 Zindello TD gets no reply", warning)
+        self.assertIn("5 m 4", warning)  # 340 s, give or take a second
+        self.assertIn("clock needs setting", logs.output[0])
+
+    def test_a_current_message_is_not_flagged(self):
+        service, _ = self.make_service(connected_ago=10)
+        self.assertIsNone(service.explain_skip({
+            "channel_idx": 1, "text": "Tester: t", "sender_timestamp": int(time.time() - 2),
+        }))
+
+    def test_unmonitored_channels_are_left_alone(self):
+        service, _ = self.make_service(connected_ago=10)
+        self.assertIsNone(service.explain_skip({
+            "channel_idx": 0, "text": "Tester: hi", "sender_timestamp": int(time.time() - 3600),
+        }))
+
+    def test_keepalive_asks_for_the_clock(self):
+        service, bot = self.make_service()
+        self.assertTrue(run(service.keepalive_once()))
+        self.assertEqual(bot.meshcore.commands.calls, 1)
+
+    def test_no_keepalive_while_reconnecting(self):
+        service, bot = self.make_service()
+        bot._transport_reconnect_in_progress = True
+        self.assertFalse(run(service.keepalive_once()))
+        bot._transport_reconnect_in_progress = False
+        bot.meshcore.is_connected = False
+        self.assertFalse(run(service.keepalive_once()))
+        self.assertEqual(bot.meshcore.commands.calls, 0)
+
+    def test_subscribes_once_per_meshcore_object(self):
+        service, bot = self.make_service()
+        service._subscribe()
+        service._subscribe()
+        self.assertEqual(len(bot.meshcore.subscriptions), 2)  # all events, and channel messages
+        bot.meshcore = FakeMeshCore()  # what a reconnect does
+        run(service.on_transport_reconnected())
+        self.assertEqual(len(bot.meshcore.subscriptions), 2)
+
+    def test_liveness_file_and_stale_warning(self):
+        service, _ = self.make_service()
+        service.on_any_event(None)
+        self.assertTrue(os.path.exists(service.alive_file))
+        self.assertFalse(service.check_stale())
+        service._last_event = time.time() - 700
+        with self.assertLogs("bathurstbot-test", level="WARNING"):
+            self.assertTrue(service.check_stale())
+        self.assertTrue(service.check_stale())  # warned once only
+        with self.assertLogs("bathurstbot-test", level="INFO") as logs:
+            service.on_any_event(None)
+        self.assertIn("talking again", logs.output[0])
 
 
 if __name__ == "__main__":

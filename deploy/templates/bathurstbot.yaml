@@ -27,14 +27,31 @@ spec:
       securityContext:
         {{- include "bathurstbot.podSecurity" (dict "uid" 1000) | nindent 8 }}
       containers:
-        # No probes: there's nothing to ask. If the companion can't be reached at start, or the
-        # bot gives up, the process exits and the kubelet restarts it (with back-off); once
-        # connected, meshcore-bot reconnects by itself.
+        # If the companion can't be reached at start, or the bot gives up, the process exits and
+        # the kubelet restarts it (with back-off); once connected, meshcore-bot reconnects by
+        # itself. The liveness probe covers the rest: our LinkWatch service
+        # (local/service_plugins/linkwatch_service.py) touches a file whenever the companion
+        # sends anything (it sends a heartbeat every 15 s even when the mesh is quiet), and the
+        # probe fails when the file is older than staleSeconds, so a bot that has stopped hearing
+        # its companion is restarted rather than left running deaf.
         - name: bot
           image: {{ include "bathurstbot.image" $b.image }}
           securityContext:
             {{- include "bathurstbot.containerSecurity" . | nindent 12 }}
             readOnlyRootFilesystem: true
+          {{- with $b.liveness }}
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - f={{ .file }}; [ -f "$f" ] && [ $(( $(date +%s) - $(stat -c %Y "$f") )) -lt {{ .staleSeconds }} ]
+            # The bot connects, loads ~700 contacts and its channels before LinkWatch starts.
+            initialDelaySeconds: 120
+            periodSeconds: 60
+            timeoutSeconds: 5
+            failureThreshold: 2
+          {{- end }}
           env:
             - name: TZ
               value: Australia/Sydney

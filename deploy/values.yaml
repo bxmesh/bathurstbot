@@ -18,6 +18,12 @@ bathurstbot:
       memory: 192Mi
     limits:
       memory: 384Mi
+  # The liveness probe: fails when nothing has come from the companion for staleSeconds (the
+  # file LinkWatch touches; keep both equal to [LinkWatch] in bathurstbot/local/config.ini).
+  # Two failures a minute apart restart the container, not the pod: same volume, same node.
+  liveness:
+    file: /tmp/bathurstbot-alive
+    staleSeconds: 600
   # meshcore-bot's database (contacts, paths, stats) and the fact pools (factpool.json). Mounted
   # at /data.
   data:
