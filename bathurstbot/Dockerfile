@@ -1,10 +1,10 @@
 # BathurstBot: meshcore-bot (github.com/agessaman/meshcore-bot, MIT) with BxMesh's config, our own
 # plugins (local/) and their data (data/).
 #
-# meshcore-bot v1.1.0, upstream's own published image, pinned by digest (ghcr.io, read 2 November
-# 2026; its org.opencontainers.image.revision label is 7a6580c, the v1.1.0 tag's commit). An update
+# meshcore-bot v1.2.0, upstream's own published image, pinned by digest (ghcr.io, read 27 November
+# 2026; its org.opencontainers.image.revision label is 52a5f1c, the v1.2.0 tag's commit). An update
 # is a pull request with its changelog, risks and rollback: change both lines together.
-FROM ghcr.io/agessaman/meshcore-bot:1.1.0@sha256:5e2425198b70d71e89f5f29710b85b95b2433e98512a9673dfd226380044fa91
+FROM ghcr.io/agessaman/meshcore-bot:1.2.0@sha256:9ef21ec36ce5be579347b517cd59dd2c827ffb22b62d273c7242efa4d6f76bd6
 
 # Ours, owned by root and read-only to the bot: the config template (the entrypoint renders it at
 # each start), the plugins, merged into upstream's /app/local, and the data they read.

@@ -40,11 +40,12 @@ DEFAULT_DATA_DIR = "/app/bathurstbot/data"
 DEFAULT_MODEL = "@cf/zai-org/glm-4.7-flash"
 API_URL = "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/{model}"
 
-# meshcore-bot's limits (modules/models.py): a channel message is "<name>: <body>" in a 160-byte
-# block, and a regional (scoped) flood costs another 10 bytes. Kept here too so the pool can work
+# meshcore-bot's limits (modules/models.py): a channel message is "<name>: <body>" in 155 bytes
+# (CHANNEL_FRAME_TEXT_LIMIT, from v1.2.0: 5 + 155 fills one 160-byte cipher block; v1.1.0 used 160),
+# and a regional (scoped) flood costs another 10 bytes. Kept here too so the pool can work
 # out its target length without a message in hand; the commands use the bot's own
 # get_max_message_length(message).
-CHANNEL_BLOCK_BYTES = 160
+CHANNEL_BLOCK_BYTES = 155
 REGIONAL_SCOPE_OVERHEAD_BYTES = 10
 
 

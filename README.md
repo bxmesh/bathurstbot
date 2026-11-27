@@ -70,7 +70,7 @@ configured, nobody can use them, a channel gets no reply, and a DM naming one ge
 ## bathurstfact and meow
 
 Each reply is short: at most half the bot's maximum message length for that reply (meshcore-bot's
-own `get_max_message_length`, halved; about 68 bytes on `#test` with a scope).
+own `get_max_message_length`, halved; about 66 bytes on `#test` with a scope).
 
 **meow** answers only on the scope `au-nsw-bhs`. A `meow` sent with `au` or `au-nsw`, or in a DM,
 gets no reply (meshcore-bot has no per-command scope setting, so the command checks the scope the

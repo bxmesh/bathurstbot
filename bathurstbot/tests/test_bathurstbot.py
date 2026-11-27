@@ -177,7 +177,7 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(set(self.config["Keywords"]), {"test", "ping", "help"})
         help_text = self.config.get("Keywords", "help").strip('"')
         # fits a scoped channel reply from BathurstBot
-        self.assertLessEqual(len(help_text.encode()), 160 - len("BathurstBot") - 2 - 10)
+        self.assertLessEqual(len(help_text.encode()), 155 - len("BathurstBot") - 2 - 10)
         words = set(help_text.replace("|", " ").split())
         for name in ENABLED - {"multitest", "help"}:
             self.assertIn(name, words)
@@ -278,7 +278,7 @@ class BathurstfactTest(NoNetwork):
         bot = FakeBot()
         cmd = self.module.BathurstfactCommand(bot)
         message = channel_message("bathurstfact", "#au-nsw-bhs")
-        self.assertEqual(cmd.get_max_message_length(message), 160 - len("BathurstBot") - 2 - 10)
+        self.assertEqual(cmd.get_max_message_length(message), 155 - len("BathurstBot") - 2 - 10)
         limit = cmd.get_max_message_length(message) // 2
         self.assertEqual(limit, factpool.fact_limit_for_name("BathurstBot"))
 
@@ -302,7 +302,7 @@ class BathurstfactTest(NoNetwork):
         bot = FakeBot(services={})
         cmd = self.module.BathurstfactCommand(bot)
         run(cmd.execute(channel_message("bathurstfact", "#au-nsw")))
-        self.assertLessEqual(factpool.byte_len(bot.sent[0]), 68)
+        self.assertLessEqual(factpool.byte_len(bot.sent[0]), 66)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -544,7 +544,7 @@ class ServiceTest(NoNetwork):
         service = self.make_service(SecretsDir(), FakeHTTP(content="Bathurst is on the Macquarie."))
         self.assertIn("added", run(service.refill_once()))
         self.assertEqual(service.pool.facts["bathurstfact"], ["Bathurst is on the Macquarie."])
-        self.assertEqual(service.fact_limit(), 68)
+        self.assertEqual(service.fact_limit(), 66)
 
     def test_refill_without_secrets_does_nothing(self):
         http = FakeHTTP()
