@@ -107,8 +107,20 @@ spec:
 # every restored file against the snapshot (--verify), the file count must match the snapshot's,
 # and every SQLite database must pass integrity_check. On a pass the restored files are deleted;
 # the scratch volume itself goes with the pod, when its Job leaves the history. A
-# failure fails the Job, which kube-state-metrics shows. Kubernetes' cron has no "first Sunday",
-# so it starts every Sunday and does nothing on the other three or four.
+# failure fails the Job. Kubernetes' cron has no "first Sunday", so it starts every Sunday and
+# does nothing on the other three or four. Each real run is recorded in the test's Lease,
+# restore-test-<claim>, which the platform makes with a Role that may patch only it
+# (cluster-platform argocd/enrolment, restoreTests; cluster-docs O878): renewTime the run's start,
+# holderIdentity running, then passed or failed. The alerts and the wall display read it, so the
+# result holds however few Jobs are kept. Its service account, below, is this chart's.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: restore-test-{{ $v.claim }}
+  labels:
+    {{- include "bathurstbot.labels" $ | nindent 4 }}
+automountServiceAccountToken: false
+---
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -119,10 +131,10 @@ spec:
   schedule: {{ $b.restoreTest.schedule | quote }}
   timeZone: {{ $b.restoreTest.timeZone | quote }}
   concurrencyPolicy: Forbid
-  # It runs weekly and tests monthly, so the last real test is at most four skipped runs back:
-  # eight successful Jobs keep it, and its log, until the next one (up to eight weeks). A Job
-  # can't label itself as a real run (it has no API access), so its log says which it was.
-  successfulJobsHistoryLimit: 8
+  # It runs weekly and tests monthly. Two successful Jobs kept, and three failed (the owner, 25
+  # November 2026, cluster-docs O712): the last real test's Job, and its log, stays two weeks; a
+  # failed one stays until three newer failures. The result itself is in the test's Lease (above).
+  successfulJobsHistoryLimit: 2
   failedJobsHistoryLimit: 3
   jobTemplate:
     spec:
@@ -136,7 +148,9 @@ spec:
             app.kubernetes.io/instance: {{ $v.claim }}
         spec:
           restartPolicy: Never
-          automountServiceAccountToken: false
+          # Its own account's token, only for its Lease (the Role allows nothing else).
+          serviceAccountName: restore-test-{{ $v.claim }}
+          automountServiceAccountToken: true
           enableServiceLinks: false
           # As the files' owner. fsGroup only on the scratch volume, so restic can write into its
           # new root folder.
@@ -164,6 +178,29 @@ spec:
                     echo "restore-test: day $day of the month in Sydney, not the first Sunday: nothing to test"
                     exit 0
                   fi
+                  # The test's Lease (above): lease <holder> [now], through the Kubernetes API with
+                  # the pod's own token. Python's standard library only.
+                  cat > /tmp/lease.py <<'PY'
+                  import datetime, json, ssl, sys, urllib.request
+                  sa = "/var/run/secrets/kubernetes.io/serviceaccount"
+                  ns = open(f"{sa}/namespace").read().strip()
+                  name, holder = sys.argv[1], sys.argv[2]
+                  spec = {"holderIdentity": holder}
+                  if sys.argv[3:] == ["now"]:
+                      spec["renewTime"] = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+                  req = urllib.request.Request(
+                      f"https://kubernetes.default.svc/apis/coordination.k8s.io/v1/namespaces/{ns}/leases/{name}",
+                      data=json.dumps({"spec": spec}).encode(), method="PATCH",
+                      headers={"Content-Type": "application/merge-patch+json",
+                               "Authorization": "Bearer " + open(f"{sa}/token").read().strip()})
+                  urllib.request.urlopen(req, timeout=30, context=ssl.create_default_context(cafile=f"{sa}/ca.crt")).read()
+                  print(f"restore-test: {name}: {holder}")
+                  PY
+                  lease() { python3 /tmp/lease.py "restore-test-{{ $v.claim }}" "$@"; }
+                  # A real run: running from now, then passed or failed as the script ends, whatever
+                  # ends it. One that dies part-way stays at running, which the alert takes as failed.
+                  lease running now
+                  trap 'rc=$?; if [ "$rc" = 0 ]; then lease passed; else lease failed || true; fi' EXIT
                   restic version
                   restic --no-lock snapshots --latest 1 --json > /tmp/latest.json
                   id=$(python3 - /tmp/latest.json "$MAX_AGE_HOURS" <<'PY'
